@@ -1,68 +1,128 @@
-# For most projects, this workflow file will not need changing; you simply need
-# to commit it to your repository.
-#
-# You may wish to alter this file to override the set of languages analyzed,
-# or to provide custom queries or build logic.
-#
-# ******** NOTE ********
-# We have attempted to detect the languages in your repository. Please check
-# the `language` matrix defined below to confirm you have the correct set of
-# supported CodeQL languages.
-#
-name: 'CodeQL'
+name: "CodeQL Advanced"
 
 on:
   push:
-    branches: [main, release]
+    branches: [ "main" ]
   pull_request:
-    # The branches below must be a subset of the branches above
-    branches: [main]
+    branches: [ "main" ]
   schedule:
-    - cron: '22 19 * * 4'
+    - cron: '33 9 * * 0'
 
 jobs:
   analyze:
-    name: Analyze
-    runs-on: ubuntu-latest
+    name: Analyze (${{ matrix.language }})
+    runs-on: ${{ matrix.language == 'swift' && 'macos-latest' || 'ubuntu-latest' }}
     permissions:
+      security-events: write
+      packages: read
       actions: read
       contents: read
-      security-events: write
 
     strategy:
       fail-fast: false
       matrix:
-        language: ['javascript', 'python']
+        include:
+          - language: actions
+            build-mode: none
+          - language: c-cpp
+            build-mode: autobuild
+          - language: go
+            build-mode: autobuild
+          - language: java-kotlin
+            build-mode: autobuild
+          - language: javascript-typescript
+            build-mode: none
+          - language: python
+            build-mode: none
+          - language: ruby
+            build-mode: none
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Initializes the CodeQL tools for scanning.
+      # ───────── Java/Kotlin ─────────
+      - name: Setup Java 11
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+          cache: gradle
+
+      # ─ Go ─────────
+      - name: Setup Go 1.21
+        if: matrix.language == 'go'
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          cache: modules
+
+      - name: Go dependencies
+        if: matrix.language == 'go'
+        run: |
+          go mod download
+          go env
+
+      # ─ JavaScript / TypeScript ─────────
+      - name: Setup Node.js 16
+        if: matrix.language == 'javascript-typescript'
+        uses: actions/setup-node@v18
+        with:
+          node-version: '16'
+          cache: 'npm'
+
+      - name: Install NPM dependencies
+        if: matrix.language == 'javascript-typescript'
+        run: npm ci
+
+      # ─ Python ─────────
+      - name: Setup Python 3.9
+        if: matrix.language == 'python'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Python dependencies
+        if: matrix.language == 'python'
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install --upgrade pip
+            pip install -r requirements.txt
+          fi
+
+      # ─ Ruby ─────────
+      - name: Setup Ruby 3.1
+        if: matrix.language == 'ruby'
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1'
+          cache: bundler
+
+      - name: Install Ruby dependencies
+        if: matrix.language == 'ruby'
+        run: |
+          if [ -f Gemfile ]; then
+            bundle install --jobs 4 --retry 3
+          fi
+
+      # ───────── Initialize CodeQL ─────────
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
-          # If you wish to specify custom queries, you can do so here or in a config file.
-          # By default, queries listed here will override any specified in a config file.
-          # Prefix the list here with "+" to use these queries and those in the config file.
-          # queries: ./path/to/local/query, your-org/your-repo/queries@main
+          build-mode: ${{ matrix.build-mode }}
 
-      # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
-      # If this step fails, then you should remove it and run the build manually (see below)
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+      # ─── Manual build hook (필요 시) ───
+      - name: Build (manual)
+        if: matrix.build-mode == 'manual'
+        shell: bash
+        run: |
+          echo "Manual build 모드입니다. 여기에 실제 빌드 명령을 넣어주세요."
+          exit 1
 
-      # ℹ️ Command-line programs to run using the OS shell.
-      # 📚 https://git.io/JvXDl
-
-      # ✏️ If the Autobuild fails above, remove it and uncomment the following three lines
-      #    and modify them (or add more) to build your code if your project
-      #    uses a compiled language
-
-      #- run: |
-      #   make bootstrap
-      #   make release
-
+      # ───────── Perform Analysis ─────────
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
