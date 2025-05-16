@@ -41,8 +41,31 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ───────── JavaScript / TypeScript ─────────
-      - name: Setup Node.js
+      # ───────── Java/Kotlin ─────────
+      - name: Setup Java 11
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+          cache: gradle
+
+      # ─ Go ─────────
+      - name: Setup Go 1.21
+        if: matrix.language == 'go'
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          cache: modules
+
+      - name: Go dependencies
+        if: matrix.language == 'go'
+        run: |
+          go mod download
+          go env
+
+      # ─ JavaScript / TypeScript ─────────
+      - name: Setup Node.js 16
         if: matrix.language == 'javascript-typescript'
         uses: actions/setup-node@v18
         with:
@@ -53,8 +76,8 @@ jobs:
         if: matrix.language == 'javascript-typescript'
         run: npm ci
 
-      # ───────── Python ─────────
-      - name: Setup Python
+      # ─ Python ─────────
+      - name: Setup Python 3.9
         if: matrix.language == 'python'
         uses: actions/setup-python@v4
         with:
@@ -68,12 +91,13 @@ jobs:
             pip install -r requirements.txt
           fi
 
-      # ───────── Ruby ─────────
-      - name: Setup Ruby
+      # ─ Ruby ─────────
+      - name: Setup Ruby 3.1
         if: matrix.language == 'ruby'
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.1'
+          cache: bundler
 
       - name: Install Ruby dependencies
         if: matrix.language == 'ruby'
@@ -89,13 +113,12 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
 
-      # ───────── Manual build hook ─────────
+      # ─── Manual build hook (필요 시) ───
       - name: Build (manual)
         if: matrix.build-mode == 'manual'
         shell: bash
         run: |
-          echo "▶ Manual build mode enabled for ${{ matrix.language }}"
-          echo "  - 여기에 실제 빌드 명령을 넣어주세요 (예: ./gradlew build, make release 등)"
+          echo "Manual build 모드입니다. 여기에 실제 빌드 명령을 넣어주세요."
           exit 1
 
       # ───────── Perform Analysis ─────────
